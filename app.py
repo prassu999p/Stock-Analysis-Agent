@@ -19,7 +19,19 @@ st.title("Stock Analysis App")
 
 # User Input
 st.sidebar.header("User Input")
-stock_ticker = st.sidebar.text_input("Enter Stock Ticker (e.g., AAPL):", "AAPL")
+market = st.sidebar.selectbox("Select Market:", ["USA", "Singapore", "India (NSE)", "India (BSE)"])
+stock_ticker = st.sidebar.text_input(f"Enter Stock Ticker for {market} (e.g., {'AAPL' if market == 'USA' else 'D05.SI' if market == 'Singapore' else 'RELIANCE.NS' if market == 'India (NSE)' else 'RELIANCE.BO'}):")
+
+# Adjust ticker based on market
+if market == "Singapore":
+    if not stock_ticker.endswith(".SI"):
+        stock_ticker += ".SI"
+elif market == "India (NSE)":
+    if not stock_ticker.endswith(".NS"):
+        stock_ticker += ".NS"
+elif market == "India (BSE)":
+    if not stock_ticker.endswith(".BO"):
+        stock_ticker += ".BO"
 
 # Fetch Stock Data
 @st.cache_resource  # Use st.cache_resource for non-serializable objects

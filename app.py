@@ -2,17 +2,34 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import time
-import google.generativeai as genai
 from duckduckgo_search import DDGS
 from dotenv import load_dotenv
 import os
+from openai import OpenAI  # Updated import for OpenAI v1.0.0+
 
 # Load environment variables
 load_dotenv()
 
-# Configure Google Gemini LLM
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+# Initialize OpenAI client
+openai_api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=openai_api_key)
+
+def generate_text_with_openai(prompt):
+    """Generate text using OpenAI's GPT model."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        return response.choices[0].message.content  # Updated for OpenAI v1.0.0+
+    except Exception as e:
+        st.error(f"OpenAI API Error: {e}")
+        return None
 
 # Streamlit App
 st.title("Stock Analysis App")
@@ -29,9 +46,15 @@ if st.session_state.stock_ticker is None:
     # Generate 3 interesting facts about the stock market
     with st.spinner("Fetching some interesting stock market facts..."):
         prompt = "Provide 3 interesting facts about the stock market in a concise format."
-        response = model.generate_content(prompt)
-        st.write("### Did You Know?")
-        st.write(response.text)
+        response = generate_text_with_openai(prompt)
+        if response:
+            st.write("### Did You Know?")
+            st.write(response)
+        else:
+            st.warning("Failed to fetch AI response. Here are some default facts:")
+            st.write("1. The New York Stock Exchange (NYSE) is the largest stock exchange in the world.")
+            st.write("2. A 'bull market' refers to a period of rising stock prices.")
+            st.write("3. The first stock exchange was established in Amsterdam in 1602.")
 
     # Suggestion to provide a stock for analysis
     st.write("**Pro Tip:** Select a market and enter a stock ticker to analyze its performance, sentiment, and more!")
@@ -127,7 +150,7 @@ if analyze_button and stock_ticker:
                 pe_ratio = info.get('trailingPE', 'N/A')
                 dividend_yield = info.get('dividendYield', 'N/A')
 
-                # Generate a quick summary using Gemini
+                # Generate a quick summary using OpenAI
                 prompt = f"""
                 Provide a quick summary for the stock {stock_ticker} based on the following data:
                 - Current Price: {current_price}
@@ -137,9 +160,12 @@ if analyze_button and stock_ticker:
                 - Historical Prices (1 year): {hist['Close'].tolist()}
                 - Analyst Recommendations: {recommendations.tail(5).to_dict() if recommendations is not None else 'N/A'}
                 """
-                response = model.generate_content(prompt)
-                st.write("### Quick Summary")
-                st.write(response.text)
+                response = generate_text_with_openai(prompt)
+                if response:
+                    st.write("### Quick Summary")
+                    st.write(response)
+                else:
+                    st.warning("Failed to generate summary. Please try again later.")
 
         # Sentiment Analysis Tab
         with tab2:
@@ -157,7 +183,7 @@ if analyze_button and stock_ticker:
                 pe_ratio = info.get('trailingPE', 'N/A')
                 dividend_yield = info.get('dividendYield', 'N/A')
 
-                # Generate sentiment analysis using Gemini
+                # Generate sentiment analysis using OpenAI
                 sentiment_prompt = f"""
                 Analyze the sentiment for the stock {stock_ticker} based on the following data:
                 - Current Price: {current_price}
@@ -177,21 +203,23 @@ if analyze_button and stock_ticker:
                 ### Negative Sentiments
                 [List of negative aspects]
                 """
-                sentiment_response = model.generate_content(sentiment_prompt)
+                sentiment_response = generate_text_with_openai(sentiment_prompt)
+                if sentiment_response:
+                    # Display the overall sentiment
+                    st.write("### Overall Sentiment")
+                    st.write(sentiment_response.split("### Positive Sentiments")[0].strip())
 
-                # Display the overall sentiment
-                st.write("### Overall Sentiment")
-                st.write(sentiment_response.text.split("### Positive Sentiments")[0].strip())
+                    # Display positive sentiments in an expandable section
+                    with st.expander("Positive Sentiments"):
+                        positive_sentiments = sentiment_response.split("### Positive Sentiments")[1].split("### Negative Sentiments")[0].strip()
+                        st.write(positive_sentiments)
 
-                # Display positive sentiments in an expandable section
-                with st.expander("Positive Sentiments"):
-                    positive_sentiments = sentiment_response.text.split("### Positive Sentiments")[1].split("### Negative Sentiments")[0].strip()
-                    st.write(positive_sentiments)
-
-                # Display negative sentiments in an expandable section
-                with st.expander("Negative Sentiments"):
-                    negative_sentiments = sentiment_response.text.split("### Negative Sentiments")[1].strip()
-                    st.write(negative_sentiments)
+                    # Display negative sentiments in an expandable section
+                    with st.expander("Negative Sentiments"):
+                        negative_sentiments = sentiment_response.split("### Negative Sentiments")[1].strip()
+                        st.write(negative_sentiments)
+                else:
+                    st.warning("Failed to analyze sentiment. Please try again later.")
 
         # News Tab
         with tab3:
